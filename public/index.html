@@ -20,6 +20,7 @@
   .logo span { color: var(--brand); }
   nav { display: flex; gap: 4px; flex-wrap: wrap; }
   nav button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; font: inherit; color: var(--muted); cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #3653a6; outline-offset: 2px; }
   nav button.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
   .engine { margin-left: auto; font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); }
   .engine.on { border-color: var(--akamai); color: #006d91; background: #e6f6fc; }
@@ -58,7 +59,7 @@
   th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
   .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
   .s-verified { background: var(--ok-bg); color: var(--ok); } .s-missed { background: var(--bad-bg); color: var(--bad); }
-  .s-unverifiable { background: var(--warn-bg); color: var(--warn); } .s-deviation { background: #fbe7f1; color: #a01d5c; }
+  .s-unverifiable, .s-needs_review { background: var(--warn-bg); color: var(--warn); } .s-deviation { background: #fbe7f1; color: #a01d5c; }
   .banner { border-radius: 10px; padding: 12px 14px; font-weight: 600; }
   .banner.ok { background: var(--ok-bg); color: var(--ok); } .banner.bad { background: var(--bad-bg); color: var(--bad); }
   .banner.warn { background: var(--warn-bg); color: var(--warn); font-weight: 500; }
@@ -71,7 +72,7 @@
   .doc div span:first-child { color: #9aa59f; text-align: right; padding: 3px 8px 3px 0; user-select: none; }
   .doc div span:last-child { padding: 3px 8px; white-space: pre-wrap; }
   .doc .l-verified { border-left-color: var(--ok); } .doc .l-missed { border-left-color: var(--bad); background: var(--bad-bg); }
-  .doc .l-unverifiable { border-left-color: #e0a030; background: var(--warn-bg); } .doc .l-deviation { border-left-color: #a01d5c; background: #fbe7f1; }
+  .doc .l-unverifiable, .doc .l-needs_review { border-left-color: #e0a030; background: var(--warn-bg); } .doc .l-deviation { border-left-color: #a01d5c; background: #fbe7f1; }
   .doc .focus { outline: 2px solid var(--ink); outline-offset: -2px; }
   tr.clickable { cursor: pointer; } tr.clickable:hover { background: #f6f8f7; }
   .timer { font-family: var(--mono); font-size: 28px; font-weight: 600; }
@@ -169,6 +170,7 @@
   </section>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" referrerpolicy="no-referrer"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -4,6 +4,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { verify } = require('./lib/verify');
+const { readPhoto } = require('./lib/vision');
 
 // ---------- config ----------
 loadEnv(path.join(__dirname, '.env'));
@@ -127,97 +129,6 @@ function extractJson(s) {
   throw new Error('Model did not return JSON');
 }
 
-// ---------- LabStrata Verify ----------
-const VERIFY_SYSTEM = `You are LabStrata Verify, an auditor that checks a lab run log against a Standard Operating Procedure (SOP).
-Rules:
-- Every SOP line that states a requirement (PPE line and every "Step N." line) must appear exactly once in "findings".
-- status must be one of: "verified" (log clearly shows it was done, including any value the SOP says to record), "missed" (no evidence in the log at all), "unverifiable" (log mentions it but lacks the evidence the SOP requires, e.g. a value it says to record, or the wording is too vague to confirm), "deviation" (log shows it was done differently than the SOP says).
-- Never assume a step was done because a later step implies it. Absence of evidence is "missed".
-- sop_line is the integer line number from the numbered SOP. sop_quote must be copied verbatim from that line.
-- log_line is the integer line number of the supporting log line, or null. log_quote is verbatim from that log line, or null.
-Return ONLY JSON: {"findings":[{"sop_line":int,"sop_quote":str,"status":str,"log_line":int|null,"log_quote":str|null,"reason":str}],"summary":str}`;
-
-function numbered(text) {
-  return text.replace(/\r/g, '').split('\n').filter(l => l.trim()).map((l, i) => `${i + 1}: ${l}`).join('\n');
-}
-function linesOf(text) { return text.replace(/\r/g, '').split('\n').filter(l => l.trim()); }
-
-// Server-side guard: never trust a citation the model gives without checking it against the source.
-function checkCitations(findings, sop, log) {
-  const S = linesOf(sop), L = linesOf(log);
-  const norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  return findings.map(f => {
-    const sopText = S[f.sop_line - 1];
-    const sopOk = Boolean(sopText && f.sop_quote && norm(sopText).includes(norm(f.sop_quote)));
-    let logOk = null;
-    if (f.log_line != null) {
-      const lt = L[f.log_line - 1];
-      logOk = Boolean(lt && f.log_quote && norm(lt).includes(norm(f.log_quote)));
-    }
-    return { ...f, sop_text: sopText || null, log_text: f.log_line ? L[f.log_line - 1] || null : null, citation_ok: sopOk && logOk !== false };
-  }).sort((a, b) => a.sop_line - b.sop_line);
-}
-
-// Offline fallback (only when Akamai is not configured or unreachable). Clearly labeled in the UI.
-function localVerify(sop, log) {
-  const S = linesOf(sop), L = linesOf(log);
-  const stem = w => w.replace(/(ing|ed|es|s)$/, '');
-  const words = t => [...new Set(t.toLowerCase().replace(/^step \d+\.\s*/, '').split(/[^a-z0-9]+/).filter(w => w.length > 2).map(stem))];
-  const reqIdx = S.map((l, i) => (/^(step \d+\.|ppe:)/i.test(l) ? i : -1)).filter(i => i >= 0);
-  const df = {};
-  reqIdx.forEach(i => words(S[i]).forEach(w => (df[w] = (df[w] || 0) + 1)));
-  const idf = w => Math.log(1 + reqIdx.length / (df[w] || 1));
-  const logWords = L.map(words);
-  const pairs = [];
-  for (const i of reqIdx) {
-    const ws = words(S[i]); const total = ws.reduce((a, w) => a + idf(w), 0);
-    L.forEach((_, j) => {
-      const hit = ws.filter(w => logWords[j].some(lw => lw.startsWith(w) || w.startsWith(lw)));
-      pairs.push({ i, j, score: hit.reduce((a, w) => a + idf(w), 0) / total });
-    });
-  }
-  // Monotonic alignment (steps and log lines are both chronological): each step takes at most one line.
-  const K = reqIdx.length, J = L.length, sc = {};
-  pairs.forEach(p => (sc[p.i + ':' + p.j] = p.score));
-  const gain = (k, j) => { const s = sc[reqIdx[k] + ':' + j]; return s > 0.04 ? s : -Infinity; };
-  const dp = Array.from({ length: K + 1 }, () => Array(J + 1).fill(0));
-  for (let k = 1; k <= K; k++) for (let j = 1; j <= J; j++)
-    dp[k][j] = Math.max(dp[k - 1][j], dp[k][j - 1], dp[k - 1][j - 1] + gain(k - 1, j - 1));
-  const match = {};
-  for (let k = K, j = J; k > 0 && j > 0;) {
-    if (dp[k][j] === dp[k - 1][j]) k--;
-    else if (dp[k][j] === dp[k][j - 1]) j--;
-    else { match[reqIdx[k - 1]] = j - 1; k--; j--; }
-  }
-  const findings = reqIdx.map(i => {
-    const j = match[i];
-    if (j == null) return { sop_line: i + 1, sop_quote: S[i], status: 'missed', log_line: null, log_quote: null, reason: 'No log line matches this requirement.' };
-    const needsValue = /\brecord\b/i.test(S[i]);
-    const hasValue = /\d/.test(L[j].replace(/^\d{1,2}:\d{2}\s*/, ''));
-    return {
-      sop_line: i + 1, sop_quote: S[i], log_line: j + 1, log_quote: L[j],
-      status: needsValue && !hasValue ? 'unverifiable' : 'verified',
-      reason: needsValue && !hasValue ? 'SOP requires a recorded value; the log line has none.' : 'Matching log entry found.',
-    };
-  });
-  return { findings, summary: 'Offline keyword matcher (fallback) — not an Akamai Inference result.' };
-}
-
-async function verify(sop, log) {
-  if (akamaiReady()) {
-    try {
-      const user = `SOP (numbered):\n${numbered(sop)}\n\nRUN LOG (numbered):\n${numbered(log)}`;
-      const { json, meta } = await callAkamai(VERIFY_SYSTEM, user);
-      return { engine: 'akamai', meta, summary: json.summary || '', findings: checkCitations(json.findings || [], sop, log) };
-    } catch (e) {
-      const r = localVerify(sop, log);
-      return { engine: 'local', error: String(e.message || e), summary: r.summary, findings: checkCitations(r.findings, sop, log) };
-    }
-  }
-  const r = localVerify(sop, log);
-  return { engine: 'local', error: 'Akamai Inference not configured (.env)', summary: r.summary, findings: checkCitations(r.findings, sop, log) };
-}
-
 const DIFF_SYSTEM = `You review changes between an APPROVED lab protocol version and the copy an operator actually ran.
 For each changed step, explain in one sentence what changed and rate the scientific/safety impact as "high", "medium" or "low".
 Return ONLY JSON: {"changes":[{"step":int,"what_changed":str,"impact":"high"|"medium"|"low"}],"verdict":str}`;
@@ -235,13 +146,18 @@ async function explainDiff(diff) {
 // ---------- HTTP ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.txt': 'text/plain; charset=utf-8' };
 const send = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
-const readBody = req => new Promise((ok, bad) => {
-  let b = ''; req.on('data', c => { b += c; if (b.length > 2e6) req.destroy(); });
-  req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { bad(e); } });
+const readBody = (req, limit = 2e6) => new Promise((ok, bad) => {
+  let b = '', tooLarge = false;
+  req.on('data', c => {
+    if (tooLarge) return;
+    b += c;
+    if (b.length > limit) { tooLarge = true; bad(httpErr(413, 'request body too large')); }
+  });
+  req.on('end', () => { if (!tooLarge) try { ok(b ? JSON.parse(b) : {}); } catch (e) { bad(e); } });
 });
 
 const routes = {
-  'GET /api/config': () => ({ akamai: akamaiReady(), model: AKAMAI.model || null, endpoint: AKAMAI.baseUrl ? new URL(AKAMAI.baseUrl).host : null }),
+  'GET /api/config': () => ({ akamai: akamaiReady(), model: AKAMAI.model || null, endpoint: AKAMAI.baseUrl ? new URL(AKAMAI.baseUrl).host : null, publicUrl: process.env.PUBLIC_URL || null }),
 
   'GET /api/protocols': () => readDb().protocols.map(p => ({ id: p.id, title: p.title, versions: p.versions })),
 
@@ -310,16 +226,25 @@ const routes = {
 
   'POST /api/verify': async ({ sop, log }) => {
     if (!sop || !log) throw httpErr(400, 'sop and log required');
-    return verify(sop, log);
+    return verify(sop, log, { ready: akamaiReady, call: callAkamai });
+  },
+
+  'POST /api/read-photo': async ({ image }) => {
+    if (!image) throw httpErr(400, 'image required');
+    return readPhoto(image);
   },
 };
 function httpErr(code, msg) { const e = new Error(msg); e.code = code; return e; }
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  if (req.method === 'GET' && /^\/capture\/[^/]+$/.test(url.pathname)) {
+    res.writeHead(200, { 'Content-Type': MIME['.html'] });
+    return fs.createReadStream(path.join(__dirname, 'public', 'capture.html')).pipe(res);
+  }
   const handler = routes[`${req.method} ${url.pathname}`];
   if (handler) {
-    try { send(res, 200, await handler(req.method === 'POST' ? await readBody(req) : {}, url.searchParams)); }
+    try { send(res, 200, await handler(req.method === 'POST' ? await readBody(req, url.pathname === '/api/read-photo' ? 8e6 : 2e6) : {}, url.searchParams)); }
     catch (e) { send(res, e.code || 500, { error: e.message }); }
     return;
   }
@@ -333,4 +258,4 @@ if (require.main === module) server.listen(PORT, () => {
   console.log(akamaiReady() ? `Akamai Inference: ${AKAMAI.model} @ ${new URL(AKAMAI.baseUrl).host}` : 'Akamai Inference NOT configured — copy .env.example to .env');
 });
 
-module.exports = { localVerify, checkCitations, hashOf };
+module.exports = { hashOf };
