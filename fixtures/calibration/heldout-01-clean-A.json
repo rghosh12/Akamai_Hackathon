@@ -1,0 +1,20 @@
+{
+  "id": "heldout-01-clean-A",
+  "split": "heldout",
+  "kind": "clean",
+  "log": "Run log CF-07 | Operator: J. Rivera | 2026-11-18 | Protocol hash: (see app)\r\n09:02 PPE on: coat, gloves, glasses.\r\n09:03 Calibration sticker checked - due 2027-03-01, current.\r\n09:04 Rotor F-45-24 inspected, no cracks/corrosion. Serial RT-88213.\r\n09:05 Pre-cool started. 09:11 display reads 4.1 °C.\r\n09:12 Loaded tubes pos 1 & 13: 1.512 g / 1.509 g. Pos 7 & 19: 1.498 g / 1.503 g.\r\n09:13 Rotor lid tightened (click), chamber lid closed.\r\n09:13 Program: 12,000 x g, 10:00 min, 4 °C. Run started.\r\n09:24 Rotor at 0 rpm, lid opened.\r\n09:25 Samples removed, no leaks observed.\r\n09:27 Chamber wiped with 70% EtOH. Run end 09:27.\r\n",
+  "gold": {
+    "3": "verified",
+    "4": "verified",
+    "5": "verified",
+    "6": "verified",
+    "7": "verified",
+    "8": "verified",
+    "9": "verified",
+    "10": "verified",
+    "11": "verified",
+    "12": "verified"
+  },
+  "sop": "SOP-EQ-014 Refrigerated Microcentrifuge Operation (Rev C)\r\nPurpose: Safe, reproducible operation of the bench-top refrigerated microcentrifuge (Asset CF-07).\r\nPPE: Lab coat, nitrile gloves, and safety glasses are required for all steps.\r\nStep 1. Confirm the calibration sticker is current and record the calibration due date.\r\nStep 2. Inspect the rotor and rotor lid for cracks or corrosion; record the rotor serial number.\r\nStep 3. Pre-cool the chamber to 4 °C and record the displayed temperature before loading.\r\nStep 4. Balance the rotor: load tubes in opposite positions with equal mass (within 0.1 g) and record each tube mass.\r\nStep 5. Tighten the rotor lid until it clicks, then close the chamber lid.\r\nStep 6. Set the run to 12,000 x g for 10 min at 4 °C and start the run.\r\nStep 7. Do not open the chamber lid until the rotor has come to a complete stop.\r\nStep 8. Remove samples and inspect for leaks; if a leak is found, follow decontamination SOP-BIO-003.\r\nStep 9. Wipe the chamber with 70% ethanol and record the run end time.\r\n",
+  "labelled_by": "Jonathan (blind to prompt)"
+}

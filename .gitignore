@@ -2,3 +2,12 @@
 data/
 .claude/
 node_modules/
+infra/state.json
+infra/keys/
+demo-auto/out/
+demo-auto/node_modules/
+*.pem
+*.crt
+*.key
+.env.*
+!.env.example

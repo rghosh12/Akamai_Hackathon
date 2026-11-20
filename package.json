@@ -1,0 +1,28 @@
+{
+  "name": "labstrata",
+  "version": "1.0.0",
+  "description": "Scientists build protocols, assign one exact version to someone, and check whether the protocol that was actually run is the one that was assigned. **LabStrata Verify** compares a run log against the SOP with Akamai Inference Cloud and cites the SOP line for each finding.",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --test tests/unit.test.js",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rghosh12/Akamai_Hackathon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rghosh12/Akamai_Hackathon/issues"
+  },
+  "homepage": "https://github.com/rghosh12/Akamai_Hackathon#readme",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1174.0",
+    "@aws-sdk/s3-request-presigner": "^3.1174.0",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4"
+  }
+}
