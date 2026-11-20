@@ -1,0 +1,10 @@
+Run log CF-07 | Operator: M. Chen | 2026-11-19 | Protocol hash: (see app)
+14:30 Gloves + coat + glasses on.
+14:31 Calibration OK, due 2027-03-01.
+14:31 Rotor looks fine.
+14:32 Chamber cooling. Chamber cold.
+14:38 Loaded 4 tubes and tightened rotor lid until click, closed lid.
+14:38 Set 12,000 x g / 10 min / 4 °C, started.
+14:49 Rotor stopped, opened lid.
+14:50 Samples out, no leaks.
+14:52 Chamber wiped with 70% ethanol, done at 14:52.

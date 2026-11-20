@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabStrata</title>
+<style>
+  :root {
+    --bg: #f5f7f6; --panel: #fff; --ink: #18211d; --muted: #5d6b64; --line: #dde3e0;
+    --brand: #0f6b5c; --brand-ink: #fff; --brand-soft: #e3f1ee;
+    --ok: #1d7a46; --ok-bg: #e5f4ea; --bad: #b42318; --bad-bg: #fdeceb;
+    --warn: #9a5b00; --warn-bg: #fdf3e1; --info: #3653a6; --info-bg: #e9eefb;
+    --akamai: #0099cc;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 24px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  .logo { font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+  .logo span { color: var(--brand); }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; font: inherit; color: var(--muted); cursor: pointer; }
+  nav button.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  .engine { margin-left: auto; font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); }
+  .engine.on { border-color: var(--akamai); color: #006d91; background: #e6f6fc; }
+  .engine.off { color: var(--warn); background: var(--warn-bg); border-color: #f0d7a8; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  section[hidden] { display: none; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .grid, .two { grid-template-columns: 1fr; } main { padding: 16px; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .stack > * + * { margin-top: 12px; }
+  label.f { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=number], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; color: var(--ink); }
+  textarea { font-family: var(--mono); font-size: 13px; min-height: 220px; resize: vertical; }
+  button.btn { border: 1px solid var(--line); background: #fff; padding: 8px 14px; border-radius: 8px; font: inherit; cursor: pointer; }
+  button.btn:hover { border-color: var(--brand); }
+  button.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
+  button.akamai { background: var(--akamai); border-color: var(--akamai); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .55; cursor: progress; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .list button { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 8px 10px; border-radius: 8px; font: inherit; cursor: pointer; }
+  .list button.active { border-color: var(--brand); background: var(--brand-soft); }
+  .list small { color: var(--muted); }
+  .step { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fbfcfb; }
+  .step-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+  .t-text { background: #eef0ef; color: #46524c; } .t-timer { background: var(--info-bg); color: var(--info); }
+  .t-question { background: #f2e9fb; color: #6b3fa0; } .t-input { background: var(--warn-bg); color: var(--warn); }
+  .icon { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 15px; padding: 2px 6px; }
+  .hash { font-family: var(--mono); font-size: 12px; background: #eef0ef; padding: 2px 6px; border-radius: 4px; word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .s-verified { background: var(--ok-bg); color: var(--ok); } .s-missed { background: var(--bad-bg); color: var(--bad); }
+  .s-unverifiable { background: var(--warn-bg); color: var(--warn); } .s-deviation { background: #fbe7f1; color: #a01d5c; }
+  .banner { border-radius: 10px; padding: 12px 14px; font-weight: 600; }
+  .banner.ok { background: var(--ok-bg); color: var(--ok); } .banner.bad { background: var(--bad-bg); color: var(--bad); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); font-weight: 500; }
+  .proof { border: 1px solid #bfe6f4; background: #f2fbfe; border-radius: 10px; padding: 12px 14px; font-size: 13px; }
+  .proof b { color: #006d91; }
+  .proof dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 8px 0 0; }
+  .proof dt { color: var(--muted); } .proof dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+  .doc { font-family: var(--mono); font-size: 13px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+  .doc div { display: grid; grid-template-columns: 36px 1fr; border-left: 4px solid transparent; }
+  .doc div span:first-child { color: #9aa59f; text-align: right; padding: 3px 8px 3px 0; user-select: none; }
+  .doc div span:last-child { padding: 3px 8px; white-space: pre-wrap; }
+  .doc .l-verified { border-left-color: var(--ok); } .doc .l-missed { border-left-color: var(--bad); background: var(--bad-bg); }
+  .doc .l-unverifiable { border-left-color: #e0a030; background: var(--warn-bg); } .doc .l-deviation { border-left-color: #a01d5c; background: #fbe7f1; }
+  .doc .focus { outline: 2px solid var(--ink); outline-offset: -2px; }
+  tr.clickable { cursor: pointer; } tr.clickable:hover { background: #f6f8f7; }
+  .timer { font-family: var(--mono); font-size: 28px; font-weight: 600; }
+  .counts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .bad-txt { color: var(--bad); }
+  .diff td { font-family: var(--mono); font-size: 12px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Lab<span>Strata</span></div>
+  <nav>
+    <button data-tab="builder" class="active">Protocol Builder</button>
+    <button data-tab="assign">Assign</button>
+    <button data-tab="run">Run</button>
+    <button data-tab="verify">LabStrata Verify</button>
+  </nav>
+  <div id="engine" class="engine">checking…</div>
+</header>
+
+<main>
+  <!-- BUILDER -->
+  <section id="builder">
+    <h1>Protocol Builder</h1>
+    <p class="sub">Compose protocols from instructions, timers, questions and required fields. Every save creates a new immutable version identified by its SHA-256 content hash.</p>
+    <div class="grid">
+      <div class="card stack">
+        <h2>Protocols</h2>
+        <div id="protoList" class="list"></div>
+        <button class="btn" id="newProto">+ New protocol</button>
+      </div>
+      <div class="stack">
+        <div class="card stack">
+          <div><label class="f">Title</label><input type="text" id="pTitle"></div>
+          <div id="steps" class="stack"></div>
+          <div class="row">
+            <span class="muted">Add:</span>
+            <button class="btn" data-add="text">Instruction</button>
+            <button class="btn" data-add="timer">Timer</button>
+            <button class="btn" data-add="question">Question</button>
+            <button class="btn" data-add="input">Required field</button>
+          </div>
+          <div class="row"><button class="btn primary" id="saveVersion">Save as new version</button><span id="saveMsg" class="muted"></span></div>
+        </div>
+        <div class="card"><h2>Version history</h2><div id="history"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ASSIGN -->
+  <section id="assign" hidden>
+    <h1>Assign</h1>
+    <p class="sub">An assignment pins one exact version hash. Whatever the operator runs is re-hashed and must match.</p>
+    <div class="two">
+      <div class="card stack">
+        <div><label class="f">Protocol</label><select id="aProto"></select></div>
+        <div><label class="f">Version</label><select id="aVersion"></select></div>
+        <div><label class="f">Assign to</label><input type="text" id="aWho" placeholder="e.g. M. Chen"></div>
+        <button class="btn primary" id="doAssign">Assign protocol</button>
+      </div>
+      <div class="card"><h2>Assignments</h2><div id="assignList"></div></div>
+    </div>
+  </section>
+
+  <!-- RUN -->
+  <section id="run" hidden>
+    <h1>Run a protocol</h1>
+    <p class="sub">Operator view. On submit, the server re-hashes the protocol that was actually executed and compares it to the pinned version.</p>
+    <div class="card stack">
+      <div class="row">
+        <div style="flex:1;min-width:220px"><label class="f">Assignment</label><select id="rAssign"></select></div>
+        <label class="row" style="margin-top:18px"><input type="checkbox" id="tamper"> Simulate a locally modified copy</label>
+      </div>
+      <div id="runSteps" class="stack"></div>
+      <button class="btn primary" id="submitRun">Submit run</button>
+    </div>
+    <div id="runResult" class="stack" style="margin-top:20px"></div>
+  </section>
+
+  <!-- VERIFY -->
+  <section id="verify" hidden>
+    <h1>LabStrata Verify</h1>
+    <p class="sub">Checks a run log against the SOP, line by line, using Akamai Inference Cloud. Every citation the model returns is re-checked against the source text on the server.</p>
+    <div class="two">
+      <div class="card stack"><label class="f">SOP</label><textarea id="vSop"></textarea></div>
+      <div class="card stack">
+        <div class="row"><label class="f" style="margin:0">Run log</label><span id="logPicks" class="row"></span></div>
+        <textarea id="vLog"></textarea>
+      </div>
+    </div>
+    <div class="row" style="margin:16px 0"><button class="btn akamai" id="doVerify">Verify with Akamai Inference Cloud</button><span id="vMsg" class="muted"></span></div>
+    <div id="vResult" class="stack"></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

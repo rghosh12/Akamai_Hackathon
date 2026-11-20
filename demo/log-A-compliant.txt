@@ -1,0 +1,11 @@
+Run log CF-07 | Operator: J. Rivera | 2026-11-18 | Protocol hash: (see app)
+09:02 PPE on: coat, gloves, glasses.
+09:03 Calibration sticker checked - due 2027-03-01, current.
+09:04 Rotor F-45-24 inspected, no cracks/corrosion. Serial RT-88213.
+09:05 Pre-cool started. 09:11 display reads 4.1 °C.
+09:12 Loaded tubes pos 1 & 13: 1.512 g / 1.509 g. Pos 7 & 19: 1.498 g / 1.503 g.
+09:13 Rotor lid tightened (click), chamber lid closed.
+09:13 Program: 12,000 x g, 10:00 min, 4 °C. Run started.
+09:24 Rotor at 0 rpm, lid opened.
+09:25 Samples removed, no leaks observed.
+09:27 Chamber wiped with 70% EtOH. Run end 09:27.

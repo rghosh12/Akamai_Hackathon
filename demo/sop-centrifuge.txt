@@ -1,0 +1,12 @@
+SOP-EQ-014 Refrigerated Microcentrifuge Operation (Rev C)
+Purpose: Safe, reproducible operation of the bench-top refrigerated microcentrifuge (Asset CF-07).
+PPE: Lab coat, nitrile gloves, and safety glasses are required for all steps.
+Step 1. Confirm the calibration sticker is current and record the calibration due date.
+Step 2. Inspect the rotor and rotor lid for cracks or corrosion; record the rotor serial number.
+Step 3. Pre-cool the chamber to 4 °C and record the displayed temperature before loading.
+Step 4. Balance the rotor: load tubes in opposite positions with equal mass (within 0.1 g) and record each tube mass.
+Step 5. Tighten the rotor lid until it clicks, then close the chamber lid.
+Step 6. Set the run to 12,000 x g for 10 min at 4 °C and start the run.
+Step 7. Do not open the chamber lid until the rotor has come to a complete stop.
+Step 8. Remove samples and inspect for leaks; if a leak is found, follow decontamination SOP-BIO-003.
+Step 9. Wipe the chamber with 70% ethanol and record the run end time.
