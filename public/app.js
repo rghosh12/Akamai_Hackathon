@@ -10,6 +10,8 @@ const api = async (path, body) => {
 const toast = msg => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); };
 
 let protocols = [], current = null, draft = null, config = {};
+let evidenceId = null, nextCursor = null;
+const statusLabel = s => ({ documented: 'Documented', contradicted: 'Contradicted', insufficient_evidence: 'Insufficient evidence', needs_review: 'Needs review' }[s] || s);
 
 // ---------- tabs ----------
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -25,7 +27,11 @@ async function loadConfig() {
   config = await api('/config');
   const el = $('#engine');
   el.className = 'engine ' + (config.akamai ? 'on' : 'off');
-  el.textContent = config.akamai ? `Akamai Inference Cloud · ${config.model}` : 'Akamai Inference not configured — offline fallback';
+  el.textContent = config.akamai ? `Akamai Inference · ${config.inference.status} · ${config.model}` : 'Akamai Inference not configured — offline fallback';
+  $('#storageStatus').textContent = `Object Storage: ${config.object_storage.status.replaceAll('_', ' ')}${config.object_storage.lastSuccessAt ? ' · read/write verified ' + new Date(config.object_storage.lastSuccessAt).toLocaleTimeString() : ''}`;
+  $('#saveEvidence').disabled = !evidenceId || !config.object_storage.configured;
+  $('#checkStorage').disabled = !config.object_storage.configured;
+  $('#refreshEvidence').disabled = !config.object_storage.configured;
 }
 
 // ---------- builder ----------
@@ -190,7 +196,7 @@ function renderRunResult(run, answers) {
     const A = I.analysis || {};
     if (A.engine === 'akamai') {
       html += `<div class="proof"><b>Impact analysis · Akamai Inference Cloud</b>${proofMeta(A.meta)}
-        <table style="margin-top:10px">${(A.changes || []).map(c => `<tr><td>Step ${c.step}</td><td>${esc(c.what_changed)}</td><td><span class="chip ${c.impact === 'high' ? 's-missed' : c.impact === 'medium' ? 's-unverifiable' : 's-verified'}">${esc(c.impact)}</span></td></tr>`).join('')}</table>
+        <table style="margin-top:10px">${(A.changes || []).map(c => `<tr><td>Step ${esc(c.step)}</td><td>${esc(c.what_changed)}</td><td><span class="chip ${c.impact === 'high' ? 's-contradicted' : c.impact === 'medium' ? 's-needs_review' : 's-documented'}">${esc(c.impact)}</span></td></tr>`).join('')}</table>
         <p style="margin:8px 0 0"><b>Verdict:</b> ${esc(A.verdict)}</p></div>`;
     } else html += `<div class="banner warn">Impact analysis unavailable: ${esc(A.error)}</div>`;
   }
@@ -205,7 +211,7 @@ function renderRunResult(run, answers) {
 }
 function proofMeta(m) {
   if (!m) return '';
-  return `<dl><dt>Provider</dt><dd>${esc(m.provider)}</dd><dt>Endpoint</dt><dd>${esc(m.endpoint)}</dd><dt>Model</dt><dd>${esc(m.model)}</dd><dt>Request ID</dt><dd>${esc(m.requestId || '—')}</dd><dt>Latency</dt><dd>${m.latencyMs} ms</dd>${m.usage ? `<dt>Tokens</dt><dd>${m.usage.prompt_tokens ?? '?'} in / ${m.usage.completion_tokens ?? '?'} out</dd>` : ''}</dl>`;
+  return `<dl><dt>Provider</dt><dd>${esc(m.provider)}</dd><dt>Endpoint</dt><dd>${esc(m.endpoint)}</dd><dt>Model</dt><dd>${esc(m.model)}</dd><dt>Request ID</dt><dd>${esc(m.requestId || '—')}</dd><dt>Latency</dt><dd>${esc(m.latencyMs)} ms</dd>${m.usage ? `<dt>Tokens</dt><dd>${esc(m.usage.prompt_tokens ?? '?')} in / ${esc(m.usage.completion_tokens ?? '?')} out</dd>` : ''}</dl>`;
 }
 
 // ---------- verify ----------
@@ -214,12 +220,22 @@ async function loadDemo() {
   $('#vSop').value = d.sop;
   const names = Object.keys(d.logs);
   $('#logPicks').innerHTML = names.map((n, i) => `<button class="btn" data-log="${i}" style="padding:4px 10px;font-size:13px">${esc(n)}</button>`).join('');
-  $('#logPicks').querySelectorAll('button').forEach(b => b.onclick = () => { $('#vLog').value = d.logs[names[b.dataset.log]]; $('#vResult').innerHTML = ''; });
+  $('#logPicks').querySelectorAll('button').forEach(b => b.onclick = () => { $('#vLog').value = d.logs[names[b.dataset.log]]; $('#vResult').innerHTML = ''; evidenceId = null; $('#saveEvidence').disabled = true; $('#evidenceMsg').textContent = ''; });
   $('#vLog').value = d.logs[names[1]];
 }
 $('#doVerify').onclick = async () => {
   const btn = $('#doVerify'); btn.disabled = true; $('#vMsg').textContent = config.akamai ? `Sending SOP + log to ${config.model}…` : 'Running offline fallback…';
-  try { renderVerify(await api('/verify', { sop: $('#vSop').value, log: $('#vLog').value })); }
+  evidenceId = null;
+  $('#saveEvidence').disabled = true;
+  try {
+    const sop = $('#vSop').value, log = $('#vLog').value;
+    const result = await api('/verify', { sop, log });
+    evidenceId = result.evidenceId;
+    $('#vSop').value = sop; $('#vLog').value = log;
+    renderVerify(result);
+    $('#evidenceMsg').textContent = `Review ${evidenceId} is saved locally. Save to Akamai to reopen it from the bucket.`;
+    await loadConfig();
+  }
   catch (e) { toast(e.message); }
   btn.disabled = false; $('#vMsg').textContent = '';
 };
@@ -229,20 +245,19 @@ function renderVerify(r) {
   const logLines = $('#vLog').value.replace(/\r/g, '').split('\n').filter(l => l.trim());
   const sopStatus = {}, logStatus = {};
   F.forEach(f => { sopStatus[f.sop_line] = f.status; if (f.log_line) logStatus[f.log_line] = f.status; });
-  const rank = { missed: 0, deviation: 1, unverifiable: 2 };
-  const bad = F.filter(f => f.status !== 'verified').sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || a.sop_line - b.sop_line);
+  const rank = { insufficient_evidence: 0, contradicted: 1, needs_review: 2 };
+  const bad = F.filter(f => f.status !== 'documented').sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || a.sop_line - b.sop_line);
   let html = r.engine === 'akamai'
     ? `<div class="proof"><b>Powered by Akamai Inference Cloud</b> — this comparison was produced by the model below; citations were then checked against the source text by LabStrata.${proofMeta(r.meta)}</div>`
     : `<div class="banner warn"><b>Offline fallback, not Akamai.</b> ${esc(r.error || '')}</div>`;
-  html += `<div class="banner ${count('missed') || count('deviation') ? 'bad' : count('unverifiable') ? 'warn' : 'ok'}">${
-    count('missed') ? `✕ ${count('missed')} missed step${count('missed') > 1 ? 's' : ''}` : count('deviation') ? '✕ Deviation found' : count('unverifiable') ? 'No missed steps, but some items cannot be verified' : '✓ Every SOP requirement is evidenced in the log'}</div>`;
-  html += `<div class="counts">${['verified', 'missed', 'deviation', 'unverifiable'].map(s => `<span class="chip s-${s}">${count(s)} ${s}</span>`).join('')}</div>`;
+  html += `<div class="banner warn">Documentation review only. Human review is required; missing evidence does not prove a step was skipped.</div>`;
+  html += `<div class="counts">${['documented', 'contradicted', 'insufficient_evidence', 'needs_review'].map(s => `<span class="chip s-${s}">${count(s)} ${statusLabel(s)}</span>`).join('')}</div>`;
   if (r.summary) html += `<p class="muted" style="margin:0">${esc(r.summary)}</p>`;
   html += `<div class="card"><table><tr><th>SOP line</th><th>Requirement (verbatim)</th><th>Status</th><th>Log evidence</th><th>Why</th></tr>${
-    [...bad, ...F.filter(f => f.status === 'verified')].map(f => `<tr class="clickable" data-s="${f.sop_line}" data-l="${f.log_line || ''}">
-      <td><b>L${f.sop_line}</b></td><td>${esc(f.sop_text || f.sop_quote)}</td><td><span class="chip s-${esc(f.status)}">${esc(f.status)}</span></td>
+    [...bad, ...F.filter(f => f.status === 'documented')].map(f => `<tr class="clickable" data-s="${f.sop_line}" data-l="${f.log_line || ''}">
+      <td><b>L${f.sop_line}</b></td><td>${esc(f.sop_text || f.sop_quote)}</td><td><span class="chip s-${esc(f.status)}">${esc(statusLabel(f.status))}</span></td>
       <td>${f.log_line ? `<b>L${f.log_line}</b> ${esc(f.log_text || f.log_quote)}` : '<span class="muted">none</span>'}</td>
-      <td>${esc(f.reason)}${f.citation_ok ? '' : ' <span class="chip s-unverifiable" title="Quoted text did not match the cited line">citation unconfirmed</span>'}</td></tr>`).join('')}</table></div>`;
+      <td>${esc(f.reason)}${f.citation_ok ? '' : ' <span class="chip s-needs_review" title="Quoted text did not match the cited line">citation unconfirmed</span>'}</td></tr>`).join('')}</table></div>`;
   html += `<div class="two"><div><h2>SOP</h2><div class="doc" id="docSop">${sopLines.map((l, i) => `<div class="l-${sopStatus[i + 1] || ''}" data-n="${i + 1}"><span>${i + 1}</span><span>${esc(l)}</span></div>`).join('')}</div></div>
     <div><h2>Run log</h2><div class="doc" id="docLog">${logLines.map((l, i) => `<div class="l-${logStatus[i + 1] || ''}" data-n="${i + 1}"><span>${i + 1}</span><span>${esc(l)}</span></div>`).join('')}</div></div></div>`;
   $('#vResult').innerHTML = html;
@@ -253,4 +268,46 @@ function renderVerify(r) {
   });
 }
 
-loadConfig(); loadProtocols(); loadDemo();
+$('#saveEvidence').onclick = async () => {
+  $('#saveEvidence').disabled = true;
+  try {
+    const saved = await api('/evidence', { id: evidenceId });
+    $('#evidenceMsg').textContent = `Saved ${saved.id} to Akamai Object Storage; read-back matched. Reopen below without inference.`;
+    await refreshEvidence();
+  } catch (e) { toast(e.message); }
+  await loadConfig();
+};
+$('#checkStorage').onclick = async () => {
+  $('#checkStorage').disabled = true;
+  try { await api('/storage/check', {}); toast('Akamai Object Storage write/read/delete succeeded'); }
+  catch (e) { toast(e.message); }
+  await loadConfig();
+};
+async function refreshEvidence(append = false) {
+  const result = await api('/evidence' + (append && nextCursor ? '?cursor=' + encodeURIComponent(nextCursor) : ''));
+  if (!append) $('#savedEvidence').replaceChildren();
+  result.packets.forEach(packet => {
+    const button = document.createElement('button'); button.className = 'btn';
+    button.textContent = `Reopen ${packet.id} · ${new Date(packet.savedAt).toLocaleString()}`;
+    button.onclick = () => reopenEvidence(packet.id).catch(e => toast(e.message));
+    $('#savedEvidence').append(button);
+  });
+  nextCursor = result.nextCursor; $('#moreEvidence').hidden = !nextCursor;
+  if (!append && !result.packets.length) $('#savedEvidence').textContent = 'No evidence packets saved in this bucket yet.';
+}
+async function reopenEvidence(id) {
+  const { packet } = await api('/evidence/packet?id=' + encodeURIComponent(id));
+  evidenceId = null;
+  $('#vSop').value = packet.sop; $('#vLog').value = packet.log;
+  renderVerify(packet.result);
+  $('#evidenceMsg').textContent = `Reopened ${packet.id} from Akamai Object Storage. Showing the saved result; no inference request was made.`;
+  await loadConfig();
+}
+$('#refreshEvidence').onclick = () => refreshEvidence().catch(e => toast(e.message));
+$('#moreEvidence').onclick = () => refreshEvidence(true).catch(e => toast(e.message));
+$('#reopenEvidence').onclick = () => reopenEvidence($('#evidenceLookup').value.trim()).catch(e => toast(e.message));
+for (const id of ['vSop', 'vLog']) $('#' + id).addEventListener('input', () => {
+  evidenceId = null; $('#saveEvidence').disabled = true;
+  $('#vResult').replaceChildren(); $('#evidenceMsg').textContent = 'Inputs changed. Verify again to create a new evidence packet.';
+});
+loadConfig().catch(e => toast(e.message)); loadProtocols(); loadDemo();

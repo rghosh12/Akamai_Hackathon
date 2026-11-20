@@ -57,8 +57,8 @@
   th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
   .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
-  .s-verified { background: var(--ok-bg); color: var(--ok); } .s-missed { background: var(--bad-bg); color: var(--bad); }
-  .s-unverifiable { background: var(--warn-bg); color: var(--warn); } .s-deviation { background: #fbe7f1; color: #a01d5c; }
+  .s-documented { background: var(--ok-bg); color: var(--ok); } .s-insufficient_evidence { background: var(--bad-bg); color: var(--bad); }
+  .s-needs_review { background: var(--warn-bg); color: var(--warn); } .s-contradicted { background: #fbe7f1; color: #a01d5c; }
   .banner { border-radius: 10px; padding: 12px 14px; font-weight: 600; }
   .banner.ok { background: var(--ok-bg); color: var(--ok); } .banner.bad { background: var(--bad-bg); color: var(--bad); }
   .banner.warn { background: var(--warn-bg); color: var(--warn); font-weight: 500; }
@@ -70,8 +70,8 @@
   .doc div { display: grid; grid-template-columns: 36px 1fr; border-left: 4px solid transparent; }
   .doc div span:first-child { color: #9aa59f; text-align: right; padding: 3px 8px 3px 0; user-select: none; }
   .doc div span:last-child { padding: 3px 8px; white-space: pre-wrap; }
-  .doc .l-verified { border-left-color: var(--ok); } .doc .l-missed { border-left-color: var(--bad); background: var(--bad-bg); }
-  .doc .l-unverifiable { border-left-color: #e0a030; background: var(--warn-bg); } .doc .l-deviation { border-left-color: #a01d5c; background: #fbe7f1; }
+  .doc .l-documented { border-left-color: var(--ok); } .doc .l-insufficient_evidence { border-left-color: var(--bad); background: var(--bad-bg); }
+  .doc .l-needs_review { border-left-color: #e0a030; background: var(--warn-bg); } .doc .l-contradicted { border-left-color: #a01d5c; background: #fbe7f1; }
   .doc .focus { outline: 2px solid var(--ink); outline-offset: -2px; }
   tr.clickable { cursor: pointer; } tr.clickable:hover { background: #f6f8f7; }
   .timer { font-family: var(--mono); font-size: 28px; font-weight: 600; }
@@ -166,6 +166,26 @@
     </div>
     <div class="row" style="margin:16px 0"><button class="btn akamai" id="doVerify">Verify with Akamai Inference Cloud</button><span id="vMsg" class="muted"></span></div>
     <div id="vResult" class="stack"></div>
+    <div class="card stack" style="margin-top:20px">
+      <h2>Evidence packets</h2>
+      <p class="muted">Save the SOP, log, source mappings, findings and model metadata together in your private Akamai bucket. Reopening uses the saved result without calling the model.</p>
+      <div id="storageStatus" role="status"></div>
+      <div class="row">
+        <button class="btn primary" id="saveEvidence" disabled>Save evidence to Akamai</button>
+        <button class="btn" id="checkStorage" disabled>Test storage connection</button>
+        <button class="btn" id="refreshEvidence" disabled>List saved evidence</button>
+      </div>
+      <div id="evidenceMsg" class="muted" role="status"></div>
+      <label class="f" for="evidenceLookup">Reopen by packet ID</label>
+      <div class="row"><input type="text" id="evidenceLookup" placeholder="Packet UUID" style="flex:1"><button class="btn" id="reopenEvidence">Reopen from Akamai</button></div>
+      <div id="savedEvidence" class="stack"></div>
+      <button class="btn" id="moreEvidence" hidden>Load more</button>
+    </div>
+    <details class="card" style="margin-top:20px">
+      <summary>Where your review runs</summary>
+      <p>Browser → LabStrata Node.js server on your Ubuntu Linode → Akamai Inference for analysis and private Akamai Object Storage for saved evidence.</p>
+      <p>Protocol versions and assignments stay in the server's local data directory. Evidence stays local until you choose Save. Credentials stay on the server. Service status records successful calls during the current process; configuration alone is not a connectivity test.</p>
+    </details>
   </section>
 </main>
 
