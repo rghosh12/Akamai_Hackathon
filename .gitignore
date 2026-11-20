@@ -1,4 +1,12 @@
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cred
+secrets/
+coverage/
+*.log
 data/
 .claude/
 node_modules/

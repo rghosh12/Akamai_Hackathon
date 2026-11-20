@@ -4,8 +4,9 @@
   "description": "Scientists build protocols, assign one exact version to someone, and check whether the protocol that was actually run is the one that was assigned. **LabStrata Verify** compares a run log against the SOP with Akamai Inference Cloud and cites the SOP line for each finding.",
   "main": "server.js",
   "scripts": {
-    "test": "node --test tests/unit.test.js",
-    "start": "node server.js"
+    "test": "node --test tests/unit.test.js tests/verify.test.js",
+    "start": "node server.js",
+    "check": "node --check server.js && node --check infra/provision.mjs && node --check public/app.js"
   },
   "repository": {
     "type": "git",
