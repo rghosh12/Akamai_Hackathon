@@ -1,5 +1,8 @@
 # LabStrata Verify — Akamai Hackathon Build Prompt
 
+> **Repository integration note (important):** This repository already contains a working-in-progress **Node.js / plain HTML+JS** LabStrata prototype described in README.md, with protocol version hashing, assignments, run integrity comparison, and an Akamai inference client. **Do not overwrite or discard that work.** Before implementing any items below, inspect `server.js`, `public/`, `demo/`, `.env.example`, and README.md. Prefer extending the existing Node.js app and its existing environment variable names (`AKAMAI_BASE_URL`, `AKAMAI_API_KEY`, `AKAMAI_MODEL`) rather than rewriting in Python/Streamlit. Treat the Python/Streamlit architecture and file tree below as a *fallback design reference*, not a mandatory migration. Maintain working endpoints, cite validation, assignment/version controls, and the honest offline mode. Add Akamai Object Storage persistence, more precise status semantics, tests, and clearer architecture UI within the current codebase. Only migrate stacks if there is a concrete technical blocker and the existing features remain intact. Document the actual stack, real integrations, and limits accurately.
+
+
 ## Role
 You are a senior full-stack engineer, AI systems engineer, and scientific software product designer. Build a complete, runnable hackathon MVP called **LabStrata Verify** in this repository. Deliver working code, not only designs or architecture notes. Optimize for a reliable, explainable live demonstration.
 
