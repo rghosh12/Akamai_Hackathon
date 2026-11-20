@@ -3,6 +3,71 @@
 > **Repository integration note (important):** This repository already contains a working-in-progress **Node.js / plain HTML+JS** LabStrata prototype described in README.md, with protocol version hashing, assignments, run integrity comparison, and an Akamai inference client. **Do not overwrite or discard that work.** Before implementing any items below, inspect `server.js`, `public/`, `demo/`, `.env.example`, and README.md. Prefer extending the existing Node.js app and its existing environment variable names (`AKAMAI_BASE_URL`, `AKAMAI_API_KEY`, `AKAMAI_MODEL`) rather than rewriting in Python/Streamlit. Treat the Python/Streamlit architecture and file tree below as a *fallback design reference*, not a mandatory migration. Maintain working endpoints, cite validation, assignment/version controls, and the honest offline mode. Add Akamai Object Storage persistence, more precise status semantics, tests, and clearer architecture UI within the current codebase. Only migrate stacks if there is a concrete technical blocker and the existing features remain intact. Document the actual stack, real integrations, and limits accurately.
 
 
+## Official Seattle hackathon repository — PRIMARY integration reference
+
+**First clone and inspect Akamai's actual workshop code, not generic Akamai examples:**
+
+```bash
+git clone https://github.com/akamai-developers/akamai-workshop-seattle-hackathon
+cd akamai-workshop-seattle-hackathon
+```
+
+Consult these actual paths in the official repository:
+- `README.md`, `WORKSHOP.md`, `00-setup/README.md`: setup and walkthrough.
+- `01-inference/README.md`, `01-inference/chat.mjs`, `01-inference/json_output.py`, `01-inference/tools.py`: the hackathon's API, Node example, constrained JSON and tools.
+- `02-linode/README.md`, `02-linode/app.service`: VM deployment, firewall rules, persistent systemd service.
+- `04-object-storage/README.md`, `04-object-storage/storage.py`: bucket, S3 client settings, save/read demonstration.
+- `demo/README.md`, `demo/app.py`: end-to-end reference app and service health statuses.
+- `docs/judging.md`: explicit judging rubric and demo requirements.
+
+**Do not copy the workshop project over the user's application or push it into the user's repository.** Treat the official project as an implementation reference; integrate only the relevant patterns while preserving the existing LabStrata app and code. Include attribution/link to the official workshop repository in the project's README.
+
+### Verified workshop credentials and model configuration (2026-11-20)
+The official Seattle workshop uses a **team-provided event inference key** (prefix `sk_aka_`) and these `.env` variables:
+
+```dotenv
+AKAMAI_BASE_URL=https://api.akamai-inference.com/v1
+AKAMAI_API_KEY= # locally supplied event key; never commit
+CHAT_MODEL=qwen3-8-27b
+VISION_MODEL=gemma-4-26b-a4b-it
+EMBEDDING_MODEL=qwen3-embedding-8b
+```
+
+**Use `CHAT_MODEL=qwen3-8-27b` for LabStrata verification and JSON output.** The earlier generic reference to `qwen3-5-9b` is **not** the workshop's designated event-key model, so do not hardcode it. Preserve the currently implemented Node variable conventions `AKAMAI_BASE_URL` / `AKAMAI_API_KEY` / `AKAMAI_MODEL` by making `AKAMAI_MODEL` default to `CHAT_MODEL`, or configure an explicit and documented mapping. The official notebook/code paths are authoritative over speculative endpoint or model names.
+
+To verify event inference from the cloned official repository:
+
+```bash
+uv run check.py
+uv run 01-inference/json_output.py
+node --env-file=.env 01-inference/chat.mjs  # Node.js 22+
+```
+
+The setup check creates/updates `.env` with a supplied event key (the key is not bundled). **No Akamai Inference API key should be committed, printed in logs, or embedded in browser code.** Event staff revoke the shared team key after the event.
+
+### Verified storage configuration
+For the official workshop, Object Storage is created in **Chicago**, using the **Standard (E3)** endpoint. The tutorial's variables are:
+
+```dotenv
+OBJ_ENDPOINT=https://us-ord-10.linodeobjects.com
+OBJ_BUCKET=
+OBJ_ACCESS_KEY=
+OBJ_SECRET_KEY=
+```
+
+Match these in the LabStrata storage adapter (or map to any existing `AKAMAI_OBJECT_STORAGE_*` aliases) and use a bucket-scoped read/write key. Follow `04-object-storage/storage.py` for its boto3 `Config(signature_version="s3v4", request_checksum_calculation="when_required")` compatibility setting. Run `uv run 04-object-storage/storage.py` against your own private bucket to confirm upload/read. Storage costs are separate and may continue after deleting files; consult `docs/cleanup.md`.
+
+### Verified deployment details
+The user is provisioning a **Seattle Ubuntu 24.04 LTS Linode 2 GB** with an Ed25519 SSH key and an inbound-DROP/outbound-ACCEPT firewall. Ensure **TCP 22** is explicitly allowed from the user's current external IP before attempting SSH. Use the custom key with Windows PowerShell via `ssh -i "$HOME\.ssh\labstrata_ed25519" root@ACTUAL_SERVER_IP`. Avoid public unauthenticated exposure of a lab-data app. Prefer a private SSH tunnel for demo access; if hosting publicly, implement authentication and HTTPS. Use a `systemd` service to keep the app running after SSH disconnects. The workshop's `02-linode/app.service` targets its Python app and must **not** be blindly copied to a Node.js app; adapt ExecStart, user, working directory and environment to the actual Node app.
+
+### Implementation priorities using the official code
+1. **Check** the actual current code in the user's `rghosh12/Akamai_Hackathon` repository; preserve version hashes, assignments, run logs, citation checks, and UI.
+2. Make its live Akamai inference client use the verified event model and credentials, and ensure it can parse/validate JSON from the response.
+3. Implement **evidence packet save / reopen** against Akamai Object Storage; show that the saved result survives application restart and requires no new inference call.
+4. Display honest service health: inference configured vs successfully called; Object Storage configured vs read/write verified; offline matcher clearly labeled non-Akamai.
+5. Add deterministic tests for contradictions, missing evidence, and fabricated citation IDs, and a three-minute demo script aligned with the official `docs/judging.md`.
+6. Preserve the existing project's stack; do not spend time on a Streamlit rewrite, Kubernetes, or a database unless a demonstrated requirement demands it.
+
 ## Role
 You are a senior full-stack engineer, AI systems engineer, and scientific software product designer. Build a complete, runnable hackathon MVP called **LabStrata Verify** in this repository. Deliver working code, not only designs or architecture notes. Optimize for a reliable, explainable live demonstration.
 
