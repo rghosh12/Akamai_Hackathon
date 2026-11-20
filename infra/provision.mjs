@@ -96,6 +96,7 @@ function sshKey() {
   return { priv: k, pub: fs.readFileSync(k + '.pub', 'utf8').trim() };
 }
 function ssh(ip, cmd, input) {
+  ip = (JSON.parse(process.env.SSH_ALT || '{}'))[ip] || ip; // optional IPv4->IPv6 override when on a changing carrier IP
   return execFileSync('ssh', ['-i', sshKey().priv, '-o', 'StrictHostKeyChecking=accept-new', '-o', 'UserKnownHostsFile=' + path.join(KEYS, 'known_hosts'), '-o', 'ConnectTimeout=15', `root@${ip}`, cmd],
     { input, encoding: 'utf8', stdio: [input ? 'pipe' : 'ignore', 'pipe', 'inherit'], maxBuffer: 50e6 });
 }
@@ -301,7 +302,8 @@ if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split("."
   apt-get install -y nodejs git >/dev/null
 fi
 id labstrata >/dev/null 2>&1 || useradd --system --home /opt/labstrata --shell /usr/sbin/nologin labstrata
-if [ -d /opt/labstrata/app/.git ]; then cd /opt/labstrata/app && git fetch -q origin ${BRANCH} && git reset -q --hard origin/${BRANCH};
+if [ -f /opt/labstrata/app/package.json ] && [ ! -d /opt/labstrata/app/.git ]; then echo 'code shipped by tarball';
+elif [ -d /opt/labstrata/app/.git ]; then cd /opt/labstrata/app && git fetch -q origin ${BRANCH} && git reset -q --hard origin/${BRANCH};
 else mkdir -p /opt/labstrata && git clone -q -b ${BRANCH} ${REPO} /opt/labstrata/app; fi
 cd /opt/labstrata/app && npm ci --omit=dev --no-audit --no-fund >/dev/null 2>&1 || npm install --omit=dev --no-audit --no-fund >/dev/null
 chown -R labstrata:labstrata /opt/labstrata; chgrp labstrata /etc/labstrata/env /etc/labstrata/db-ca.crt 2>/dev/null || true; chmod 640 /etc/labstrata/env
@@ -323,6 +325,10 @@ WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload && systemctl enable --now labstrata >/dev/null 2>&1 && systemctl restart labstrata
 sleep 3; curl -s localhost/calibration; echo`;
+      if (process.env.SHIP_TARBALL) { // private repo: ship the committed code over ssh instead of git clone
+        const tar = execFileSync('git', ['archive', '--format=tar.gz', 'HEAD'], { cwd: ROOT, maxBuffer: 100e6 }).toString('base64');
+        ssh(n.publicIp, 'mkdir -p /opt/labstrata/app && base64 -d | tar xz -C /opt/labstrata/app', tar);
+      }
       console.log(ssh(n.publicIp, 'bash -s', script));
       ok('node', name, 'deployed');
     }
