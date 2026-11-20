@@ -289,7 +289,7 @@ function renderVerify(r) {
     ? `<div class="proof"><b>Powered by Akamai Inference Cloud</b> — this comparison was produced by the model below; citations were then checked against the source text by LabStrata.${proofMeta(r.meta)}</div>`
     : `<div class="banner warn"><b>Offline fallback, not Akamai.</b> ${esc(r.error || '')}</div>`;
   html += `<div class="banner ${count('missed') || count('deviation') ? 'bad' : count('unverifiable') || count('needs_review') ? 'warn' : 'ok'}">${
-    count('missed') ? `✕ ${count('missed')} Not documented` : count('deviation') ? '✕ Deviation found' : count('unverifiable') || count('needs_review') ? 'Some items need review' : '✓ Every SOP requirement is evidenced in the log'}</div>`;
+    count('missed') ? `Not documented: ${esc(((F.find(f => f.status === 'missed') || {}).sop_text || '').split(/[:;]/)[0].trim() || count('missed') + ' step(s)')}${count('missed') > 1 ? ` <span style="opacity:.6">+${count('missed') - 1} more</span>` : ''}` : count('deviation') ? '✕ Deviation found' : count('unverifiable') || count('needs_review') ? 'Some items need review' : '✓ Every SOP requirement is evidenced in the log'}</div>`;
   html += `<div class="counts">${['missed', 'deviation', 'needs_review', 'unverifiable', 'verified'].map(s => `<span class="chip s-${s}">${count(s)} ${label(s)}</span>`).join('')}</div>`;
   if (r.summary) html += `<p class="muted" style="margin:0">${esc(r.summary)}</p>`;
   html += `<div class="card"><table><tr><th>SOP line</th><th>Requirement (verbatim)</th><th>Status</th><th>Log evidence</th><th>Why</th></tr>${
