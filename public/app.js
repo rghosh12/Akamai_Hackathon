@@ -108,7 +108,12 @@ async function renderAssign() {
   };
   $('#aProto').onchange = fillVersions; fillVersions();
   const list = await api('/assignments');
-  $('#assignList').innerHTML = list.length ? `<table><tr><th>Assignee</th><th>Protocol</th><th>Pinned hash</th></tr>${list.map(a => `<tr><td>${esc(a.assignee)}</td><td>${esc(a.title)} <span class="muted">v${a.version}</span></td><td><span class="hash">${short(a.hash)}</span></td></tr>`).reverse().join('')}</table>` : '<p class="muted">No assignments yet.</p>';
+  const captureOrigin = config.publicUrl || location.origin;
+  const localHint = /^(localhost|127\.0\.0\.1|::1)$/i.test(location.hostname) ? '<p class="muted">Open this app by its network address so a phone can scan this</p>' : '';
+  $('#assignList').innerHTML = list.length ? `${localHint}<table><tr><th>Assignee</th><th>Protocol</th><th>Pinned hash</th><th>Phone capture</th></tr>${list.map(a => `<tr><td>${esc(a.assignee)}</td><td>${esc(a.title)} <span class="muted">v${a.version}</span></td><td><span class="hash">${short(a.hash)}</span></td><td><a href="/capture/${encodeURIComponent(a.id)}">Open capture</a><div class="qr" data-id="${esc(a.id)}" aria-label="QR code for phone capture"></div></td></tr>`).reverse().join('')}</table>` : '<p class="muted">No assignments yet.</p>';
+  $('#assignList').querySelectorAll('.qr').forEach(el => {
+    if (window.QRCode) new QRCode(el, { text: `${captureOrigin.replace(/\/+$/, '')}/capture/${el.dataset.id}`, width: 72, height: 72 });
+  });
 }
 $('#doAssign').onclick = async () => {
   try {
@@ -225,22 +230,23 @@ $('#doVerify').onclick = async () => {
 };
 function renderVerify(r) {
   const F = r.findings, count = s => F.filter(f => f.status === s).length;
+  const label = s => ({ missed: 'Not documented', needs_review: 'Needs review', verified: 'Verified', deviation: 'Deviation', unverifiable: 'Unverifiable' }[s] || s);
   const sopLines = $('#vSop').value.replace(/\r/g, '').split('\n').filter(l => l.trim());
   const logLines = $('#vLog').value.replace(/\r/g, '').split('\n').filter(l => l.trim());
   const sopStatus = {}, logStatus = {};
   F.forEach(f => { sopStatus[f.sop_line] = f.status; if (f.log_line) logStatus[f.log_line] = f.status; });
-  const rank = { missed: 0, deviation: 1, unverifiable: 2 };
+  const rank = { missed: 0, deviation: 1, needs_review: 2, unverifiable: 3 };
   const bad = F.filter(f => f.status !== 'verified').sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || a.sop_line - b.sop_line);
   let html = r.engine === 'akamai'
     ? `<div class="proof"><b>Powered by Akamai Inference Cloud</b> — this comparison was produced by the model below; citations were then checked against the source text by LabStrata.${proofMeta(r.meta)}</div>`
     : `<div class="banner warn"><b>Offline fallback, not Akamai.</b> ${esc(r.error || '')}</div>`;
-  html += `<div class="banner ${count('missed') || count('deviation') ? 'bad' : count('unverifiable') ? 'warn' : 'ok'}">${
-    count('missed') ? `✕ ${count('missed')} missed step${count('missed') > 1 ? 's' : ''}` : count('deviation') ? '✕ Deviation found' : count('unverifiable') ? 'No missed steps, but some items cannot be verified' : '✓ Every SOP requirement is evidenced in the log'}</div>`;
-  html += `<div class="counts">${['verified', 'missed', 'deviation', 'unverifiable'].map(s => `<span class="chip s-${s}">${count(s)} ${s}</span>`).join('')}</div>`;
+  html += `<div class="banner ${count('missed') || count('deviation') ? 'bad' : count('unverifiable') || count('needs_review') ? 'warn' : 'ok'}">${
+    count('missed') ? `✕ ${count('missed')} Not documented` : count('deviation') ? '✕ Deviation found' : count('unverifiable') || count('needs_review') ? 'Some items need review' : '✓ Every SOP requirement is evidenced in the log'}</div>`;
+  html += `<div class="counts">${['missed', 'deviation', 'needs_review', 'unverifiable', 'verified'].map(s => `<span class="chip s-${s}">${count(s)} ${label(s)}</span>`).join('')}</div>`;
   if (r.summary) html += `<p class="muted" style="margin:0">${esc(r.summary)}</p>`;
   html += `<div class="card"><table><tr><th>SOP line</th><th>Requirement (verbatim)</th><th>Status</th><th>Log evidence</th><th>Why</th></tr>${
     [...bad, ...F.filter(f => f.status === 'verified')].map(f => `<tr class="clickable" data-s="${f.sop_line}" data-l="${f.log_line || ''}">
-      <td><b>L${f.sop_line}</b></td><td>${esc(f.sop_text || f.sop_quote)}</td><td><span class="chip s-${esc(f.status)}">${esc(f.status)}</span></td>
+      <td><b>L${f.sop_line}</b></td><td>${esc(f.sop_text || f.sop_quote)}</td><td><span class="chip s-${esc(f.status)}">${esc(label(f.status))}</span></td>
       <td>${f.log_line ? `<b>L${f.log_line}</b> ${esc(f.log_text || f.log_quote)}` : '<span class="muted">none</span>'}</td>
       <td>${esc(f.reason)}${f.citation_ok ? '' : ' <span class="chip s-unverifiable" title="Quoted text did not match the cited line">citation unconfirmed</span>'}</td></tr>`).join('')}</table></div>`;
   html += `<div class="two"><div><h2>SOP</h2><div class="doc" id="docSop">${sopLines.map((l, i) => `<div class="l-${sopStatus[i + 1] || ''}" data-n="${i + 1}"><span>${i + 1}</span><span>${esc(l)}</span></div>`).join('')}</div></div>

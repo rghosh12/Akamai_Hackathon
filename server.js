@@ -19,8 +19,8 @@ const V = require('./lib/verify');
 const db = require('./lib/db');
 const storage = require('./lib/storage');
 const calibration = require('./lib/calibration');
-let vision;
-try { vision = require('./lib/vision'); } catch { vision = require('./lib/vision-basic'); }
+const visionBasic = require('./lib/vision-basic');   // reads a photo already in the capture bucket (by key)
+const { readPhoto } = require('./lib/vision');        // reads a photo sent directly as base64 (fallback upload)
 
 const PORT = Number(process.env.PORT || 3000);
 const DEMO_DIR = path.join(__dirname, 'demo');
@@ -101,7 +101,7 @@ const baseUrl = req => PUBLIC_URL || `${req.headers['x-forwarded-proto'] || 'htt
 
 const routes = {
   'GET /api/config': () => ({
-    akamai: akamaiReady(), model: AKAMAI.model || null, visionModel: AKAMAI.visionModel, embedModel: AKAMAI.embedModel, endpoint: endpointHost(),
+    akamai: akamaiReady(), model: AKAMAI.model || null, visionModel: AKAMAI.visionModel, embedModel: AKAMAI.embedModel, endpoint: endpointHost(), publicUrl: PUBLIC_URL || null,
     db: db.mode(), storage: { ready: storage.storageReady(), lockMode: storage.CFG.lockMode, region: storage.CFG.region },
     calibration: calibration.current(), node: process.env.NODE_NAME || require('os').hostname(),
   }),
@@ -218,9 +218,10 @@ const routes = {
     return { photo: { ...p, url: view.url } };
   },
   // Gemma reads the handwriting. Unreadable lines are reported, never guessed.
-  'POST /api/read-photo': async ({ key }) => {
-    if (!key) throw httpErr(400, 'key required');
-    return vision.readPage(key);
+  'POST /api/read-photo': async ({ key, image }) => {
+    if (key) return visionBasic.readPage(key);
+    if (image) return readPhoto(image);
+    throw httpErr(400, 'key or image required');
   },
 
   // ---- Sign + seal (Object Lock), tamper attempt, auditor share ----
