@@ -9,7 +9,7 @@ const api = async (path, body) => {
 };
 const toast = msg => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2600); };
 
-let protocols = [], current = null, draft = null, config = {};
+let protocols = [], current = null, draft = null, config = {}, verifyContext = { assignmentId: null, photoKey: null, vision: null, photoUrl: null }, activeRunId = null;
 
 // ---------- tabs ----------
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -22,11 +22,32 @@ function showTab(id) {
 
 // ---------- engine badge ----------
 async function loadConfig() {
-  config = await api('/config');
+  try { config = await api('/config'); } catch (_) {
+    config = { akamai: false, storage: { ready: false }, calibration: { state: 'PENDING' } };
+  }
   const el = $('#engine');
   el.className = 'engine ' + (config.akamai ? 'on' : 'off');
   el.textContent = config.akamai ? `Akamai Inference Cloud · ${config.model}` : 'Akamai Inference not configured — offline fallback';
+  renderCalibration(config.calibration);
 }
+function renderCalibration(cal = {}) {
+  const badge = $('#calibrationBadge');
+  const state = cal.state || 'PENDING';
+  badge.className = 'calibration ' + (state === 'CALIBRATED' ? 'ok' : state === 'OUT_OF_CALIBRATION' ? 'bad' : 'pending');
+  if (state === 'CALIBRATED') badge.textContent = `AI checker calibrated ${cal.correct ?? 0}/${cal.total ?? 0} at ${cal.at ? new Date(cal.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}`;
+  else if (state === 'OUT_OF_CALIBRATION') badge.textContent = 'Reviews paused: checker out of calibration';
+  else badge.textContent = 'Calibration pending';
+  $('#doVerify').disabled = state === 'OUT_OF_CALIBRATION';
+}
+async function refreshCalibration() {
+  try { const cal = await api('/calibration'); config.calibration = cal; renderCalibration(cal); } catch (_) { renderCalibration(); }
+}
+$('#recalibrate').onclick = async () => {
+  const button = $('#recalibrate'); button.disabled = true;
+  try { const cal = await api('/calibration/run', {}); config.calibration = cal; renderCalibration(cal); $('#vMsg').textContent = 'Calibration updated.'; }
+  catch (e) { $('#vMsg').textContent = `Recalibration unavailable: ${e.message}`; }
+  finally { button.disabled = false; }
+};
 
 // ---------- builder ----------
 const TYPES = { text: 'Instruction', timer: 'Timer', question: 'Question', input: 'Required field' };
@@ -110,9 +131,14 @@ async function renderAssign() {
   const list = await api('/assignments');
   const captureOrigin = config.publicUrl || location.origin;
   const localHint = /^(localhost|127\.0\.0\.1|::1)$/i.test(location.hostname) ? '<p class="muted">Open this app by its network address so a phone can scan this</p>' : '';
-  $('#assignList').innerHTML = list.length ? `${localHint}<table><tr><th>Assignee</th><th>Protocol</th><th>Pinned hash</th><th>Phone capture</th></tr>${list.map(a => `<tr><td>${esc(a.assignee)}</td><td>${esc(a.title)} <span class="muted">v${a.version}</span></td><td><span class="hash">${short(a.hash)}</span></td><td><a href="/capture/${encodeURIComponent(a.id)}">Open capture</a><div class="qr" data-id="${esc(a.id)}" aria-label="QR code for phone capture"></div></td></tr>`).reverse().join('')}</table>` : '<p class="muted">No assignments yet.</p>';
-  $('#assignList').querySelectorAll('.qr').forEach(el => {
-    if (window.QRCode) new QRCode(el, { text: `${captureOrigin.replace(/\/+$/, '')}/capture/${el.dataset.id}`, width: 72, height: 72 });
+  $('#assignList').innerHTML = list.length ? `${localHint}<table><tr><th>Assignee</th><th>Protocol</th><th>Pinned hash</th><th>Phone capture</th></tr>${list.map(a => `<tr><td>${esc(a.assignee)}</td><td>${esc(a.title)} <span class="muted">v${a.version}</span></td><td><span class="hash">${short(a.hash)}</span></td><td><a href="/capture/${encodeURIComponent(a.id)}">Open capture</a><img class="qr" data-demo="capture-qr" data-id="${esc(a.id)}" alt="QR code for ${esc(a.assignee)}'s phone capture link"></td></tr>`).reverse().join('')}</table>` : '<p class="muted">No assignments yet.</p>';
+  $('#assignList').querySelectorAll('.qr').forEach(async el => {
+    try {
+      const text = `${captureOrigin.replace(/\/+$/, '')}/capture/${encodeURIComponent(el.dataset.id)}`;
+      const qr = await api('/qr?text=' + encodeURIComponent(text));
+      el.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(qr.svg);
+      el.width = 72; el.height = 72;
+    } catch (_) { el.alt = 'QR code unavailable'; }
   });
 }
 $('#doAssign').onclick = async () => {
@@ -224,12 +250,32 @@ async function loadDemo() {
 }
 $('#doVerify').onclick = async () => {
   const btn = $('#doVerify'); btn.disabled = true; $('#vMsg').textContent = config.akamai ? `Sending SOP + log to ${config.model}…` : 'Running offline fallback…';
-  try { renderVerify(await api('/verify', { sop: $('#vSop').value, log: $('#vLog').value })); }
-  catch (e) { toast(e.message); }
+  try {
+    const result = await api('/verify', { sop: $('#vSop').value, log: $('#vLog').value, assignmentId: verifyContext.assignmentId, photoKey: verifyContext.photoKey, vision: verifyContext.vision });
+    activeRunId = result.runId || null;
+    renderVerify(result);
+  } catch (e) { $('#vResult').textContent = e.message; }
   btn.disabled = false; $('#vMsg').textContent = '';
 };
+$('#loadPhoto').onclick = async () => {
+  const button = $('#loadPhoto'); button.disabled = true; $('#photoRead').textContent = 'Loading latest notebook photo…';
+  try {
+    const assignments = await api('/assignments');
+    const assignmentId = $('#rAssign').value || assignments.at(-1)?.id;
+    if (!assignmentId) throw new Error('Create an assignment before loading a notebook photo.');
+    const latest = await api('/capture/latest?assignmentId=' + encodeURIComponent(assignmentId));
+    if (!latest.photo) throw new Error('No notebook photo has been captured for this assignment.');
+    const read = await api('/read-photo', { key: latest.photo.key });
+    const lines = read.lines || [];
+    verifyContext = { assignmentId, photoKey: latest.photo.key, vision: read, photoUrl: latest.photo.url };
+    $('#vLog').value = lines.map(line => line.text || '').filter(Boolean).join('\n');
+    $('#photoRead').innerHTML = `<div class="card photo-read"><img src="${esc(latest.photo.url)}" alt="Latest notebook photo"><div><h2>Lines read from notebook photo</h2><div class="read-lines" data-demo="read-lines">${lines.length ? lines.map(line => `${esc(line.n || '')}. ${line.unreadable ? 'Unreadable: retake or rewrite' : esc(line.text || '')}`).join('\n') : esc(read.message || 'No readable lines returned.')}</div></div></div>`;
+    $('#vMsg').textContent = 'Photo loaded. Review the transcription before verifying.';
+  } catch (e) { $('#photoRead').textContent = e.message; }
+  finally { button.disabled = false; }
+};
 function renderVerify(r) {
-  const F = r.findings, count = s => F.filter(f => f.status === s).length;
+  const F = Array.isArray(r.findings) ? r.findings : [], count = s => F.filter(f => f.status === s).length;
   const label = s => ({ missed: 'Not documented', needs_review: 'Needs review', verified: 'Verified', deviation: 'Deviation', unverifiable: 'Unverifiable' }[s] || s);
   const sopLines = $('#vSop').value.replace(/\r/g, '').split('\n').filter(l => l.trim());
   const logLines = $('#vLog').value.replace(/\r/g, '').split('\n').filter(l => l.trim());
@@ -237,7 +283,9 @@ function renderVerify(r) {
   F.forEach(f => { sopStatus[f.sop_line] = f.status; if (f.log_line) logStatus[f.log_line] = f.status; });
   const rank = { missed: 0, deviation: 1, needs_review: 2, unverifiable: 3 };
   const bad = F.filter(f => f.status !== 'verified').sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3) || a.sop_line - b.sop_line);
-  let html = r.engine === 'akamai'
+  let html = r.doesNotMatch
+    ? `<div class="banner warn">${esc(r.message || "This log doesn't match the assigned SOP.")}</div>`
+    : r.engine === 'akamai'
     ? `<div class="proof"><b>Powered by Akamai Inference Cloud</b> — this comparison was produced by the model below; citations were then checked against the source text by LabStrata.${proofMeta(r.meta)}</div>`
     : `<div class="banner warn"><b>Offline fallback, not Akamai.</b> ${esc(r.error || '')}</div>`;
   html += `<div class="banner ${count('missed') || count('deviation') ? 'bad' : count('unverifiable') || count('needs_review') ? 'warn' : 'ok'}">${
@@ -245,18 +293,45 @@ function renderVerify(r) {
   html += `<div class="counts">${['missed', 'deviation', 'needs_review', 'unverifiable', 'verified'].map(s => `<span class="chip s-${s}">${count(s)} ${label(s)}</span>`).join('')}</div>`;
   if (r.summary) html += `<p class="muted" style="margin:0">${esc(r.summary)}</p>`;
   html += `<div class="card"><table><tr><th>SOP line</th><th>Requirement (verbatim)</th><th>Status</th><th>Log evidence</th><th>Why</th></tr>${
-    [...bad, ...F.filter(f => f.status === 'verified')].map(f => `<tr class="clickable" data-s="${f.sop_line}" data-l="${f.log_line || ''}">
+    [...bad, ...F.filter(f => f.status === 'verified')].map(f => `<tr class="clickable" data-demo="finding" data-status="${esc(f.status)}" data-s="${f.sop_line}" data-l="${f.log_line || ''}" tabindex="0">
       <td><b>L${f.sop_line}</b></td><td>${esc(f.sop_text || f.sop_quote)}</td><td><span class="chip s-${esc(f.status)}">${esc(label(f.status))}</span></td>
       <td>${f.log_line ? `<b>L${f.log_line}</b> ${esc(f.log_text || f.log_quote)}` : '<span class="muted">none</span>'}</td>
       <td>${esc(f.reason)}${f.citation_ok ? '' : ' <span class="chip s-unverifiable" title="Quoted text did not match the cited line">citation unconfirmed</span>'}</td></tr>`).join('')}</table></div>`;
+  if (activeRunId) html += sealControls(activeRunId);
   html += `<div class="two"><div><h2>SOP</h2><div class="doc" id="docSop">${sopLines.map((l, i) => `<div class="l-${sopStatus[i + 1] || ''}" data-n="${i + 1}"><span>${i + 1}</span><span>${esc(l)}</span></div>`).join('')}</div></div>
     <div><h2>Run log</h2><div class="doc" id="docLog">${logLines.map((l, i) => `<div class="l-${logStatus[i + 1] || ''}" data-n="${i + 1}"><span>${i + 1}</span><span>${esc(l)}</span></div>`).join('')}</div></div></div>`;
   $('#vResult').innerHTML = html;
-  $('#vResult').querySelectorAll('tr.clickable').forEach(tr => tr.onclick = () => {
+  const focusFinding = tr => {
     document.querySelectorAll('.doc .focus').forEach(x => x.classList.remove('focus'));
     const s = $(`#docSop [data-n="${tr.dataset.s}"]`); s?.classList.add('focus'); s?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     if (tr.dataset.l) $(`#docLog [data-n="${tr.dataset.l}"]`)?.classList.add('focus');
-  });
+  };
+  $('#vResult').querySelectorAll('tr.clickable').forEach(tr => { tr.onclick = () => focusFinding(tr); tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusFinding(tr); } }; });
+  bindSealControls();
+}
+function sealControls(runId) {
+  return `<div class="card stack" id="sealControls"><h2>Human review and sealed record</h2><div><label class="f" for="reviewer">Reviewer</label><input id="reviewer" data-demo="reviewer" type="text" autocomplete="name"></div><div class="row"><button class="btn primary" data-demo="sign-button" id="signButton">Sign &amp; seal</button><button class="btn" data-demo="tamper-button" id="tamperButton" disabled>Try to alter this record</button><button class="btn" data-demo="share-button" id="shareButton" disabled>Share with auditor</button></div><div id="sealResult" role="status"></div></div>`;
+}
+function bindSealControls() {
+  const result = $('#sealResult');
+  $('#signButton').onclick = async () => {
+    const button = $('#signButton'); button.disabled = true; result.textContent = 'Sealing review record…';
+    try {
+      const r = await api('/sign', { runId: activeRunId, reviewer: $('#reviewer').value.trim() }); const seal = r.seal;
+      result.innerHTML = `<div class="banner ok">Sealed</div><p>Version ID: <span class="hash">${esc(seal.versionId || '—')}</span><br>SHA-256: <span class="hash">${esc(seal.sha256 || '—')}</span><br>Lock mode: ${esc(seal.lockMode || '—')}</p>`;
+      $('#tamperButton').disabled = false; $('#shareButton').disabled = false;
+    } catch (e) { result.textContent = e.message; }
+    finally { button.disabled = false; }
+  };
+  $('#tamperButton').onclick = async () => {
+    const button = $('#tamperButton'); button.disabled = true; result.textContent = 'Attempting alteration…';
+    try { const r = await api('/tamper', { runId: activeRunId }); result.innerHTML = `<p>Delete result: ${esc(r.delete?.code || r.delete?.message || 'unknown')}</p><p>${esc(r.verdict || '')}</p>`; }
+    catch (e) { result.textContent = e.message; } finally { button.disabled = false; }
+  };
+  $('#shareButton').onclick = async () => {
+    try { const r = await api('/share', { runId: activeRunId }); result.innerHTML += `<div><label class="f" for="shareLink">Auditor link (expires in 24 hours)</label><div class="row"><input id="shareLink" data-demo="share-link" type="text" readonly value="${esc(r.url)}"><button class="btn" id="copyShare" type="button">Copy</button></div></div>`; $('#copyShare').onclick = async () => { try { await navigator.clipboard.writeText(r.url); $('#copyShare').textContent = 'Copied'; } catch (_) { $('#shareLink').select(); document.execCommand('copy'); $('#copyShare').textContent = 'Copied'; } }; }
+    catch (e) { result.textContent = e.message; }
+  };
 }
 
-loadConfig(); loadProtocols(); loadDemo();
+loadConfig(); refreshCalibration(); loadProtocols().catch(e => toast(e.message)); loadDemo().catch(e => toast(e.message));

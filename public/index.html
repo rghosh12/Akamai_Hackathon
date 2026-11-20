@@ -25,6 +25,14 @@
   .engine { margin-left: auto; font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); }
   .engine.on { border-color: var(--akamai); color: #006d91; background: #e6f6fc; }
   .engine.off { color: var(--warn); background: var(--warn-bg); border-color: #f0d7a8; }
+  .calibration { font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); }
+  .calibration.ok { color: var(--ok); background: var(--ok-bg); border-color: #b9dfc5; }
+  .calibration.pending { color: var(--muted); background: #eef0ef; }
+  .calibration.bad { color: var(--bad); background: var(--bad-bg); border-color: #f2c4c0; }
+  .photo-read { display:grid; grid-template-columns:minmax(180px, .8fr) 1fr; gap:16px; align-items:start; }
+  .photo-read img { width:100%; max-height:420px; object-fit:contain; border:1px solid var(--line); border-radius:8px; }
+  .read-lines { white-space:pre-wrap; font-family:var(--mono); font-size:13px; }
+  @media (max-width: 860px) { .photo-read { grid-template-columns:1fr; } }
   main { max-width: 1200px; margin: 0 auto; padding: 24px; }
   section[hidden] { display: none; }
   h1 { font-size: 22px; margin: 0 0 4px; }
@@ -88,11 +96,13 @@
   <div class="logo">Lab<span>Strata</span></div>
   <nav>
     <button data-tab="builder" class="active">Protocol Builder</button>
-    <button data-tab="assign">Assign</button>
+    <button data-tab="assign" data-demo="tab-assign">Assign</button>
     <button data-tab="run">Run</button>
-    <button data-tab="verify">LabStrata Verify</button>
+    <button data-tab="verify" data-demo="tab-verify">LabStrata Verify</button>
   </nav>
   <div id="engine" class="engine">checking…</div>
+  <div id="calibrationBadge" class="calibration pending" data-demo="calibration-badge" role="status">Calibration pending</div>
+  <button class="btn" id="recalibrate" type="button">Recalibrate</button>
 </header>
 
 <main>
@@ -132,8 +142,8 @@
       <div class="card stack">
         <div><label class="f">Protocol</label><select id="aProto"></select></div>
         <div><label class="f">Version</label><select id="aVersion"></select></div>
-        <div><label class="f">Assign to</label><input type="text" id="aWho" placeholder="e.g. M. Chen"></div>
-        <button class="btn primary" id="doAssign">Assign protocol</button>
+        <div><label class="f" for="aWho">Assign to</label><input type="text" id="aWho" data-demo="assignee" placeholder="e.g. M. Chen"></div>
+        <button class="btn primary" id="doAssign" data-demo="assign-button">Assign protocol</button>
       </div>
       <div class="card"><h2>Assignments</h2><div id="assignList"></div></div>
     </div>
@@ -161,12 +171,13 @@
     <div class="two">
       <div class="card stack"><label class="f">SOP</label><textarea id="vSop"></textarea></div>
       <div class="card stack">
-        <div class="row"><label class="f" style="margin:0">Run log</label><span id="logPicks" class="row"></span></div>
+        <div class="row"><label class="f" style="margin:0" for="vLog">Run log</label><span id="logPicks" class="row"></span></div>
         <textarea id="vLog"></textarea>
       </div>
     </div>
-    <div class="row" style="margin:16px 0"><button class="btn akamai" id="doVerify">Verify with Akamai Inference Cloud</button><span id="vMsg" class="muted"></span></div>
-    <div id="vResult" class="stack"></div>
+    <div class="row" style="margin:16px 0"><button class="btn" id="loadPhoto" data-demo="load-photo">Load latest notebook photo</button><button class="btn akamai" id="doVerify" data-demo="verify-button">Verify with Akamai Inference Cloud</button><span id="vMsg" class="muted" role="status"></span></div>
+    <div id="photoRead" class="stack" role="status"></div>
+    <div id="vResult" class="stack" role="status"></div>
   </section>
 </main>
 
